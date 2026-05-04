@@ -467,7 +467,14 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
   const [year, setYear] = useState(TODAY.getFullYear());
   const [month, setMonth] = useState(TODAY.getMonth());
   const [selected, setSelected] = useState(null);
+  const [showWeek, setShowWeek] = useState(false);
   const unread = notifications.filter(n=>!n.read).length;
+
+  // Aulas desta semana agrupadas por dia
+  const weekBookings = bookings.filter(b => {
+    const d = parseDate(b.date);
+    return d >= TODAY && d < addDays(TODAY, 7);
+  }).sort((a,b) => a.date > b.date ? 1 : a.date < b.date ? -1 : a.time > b.time ? 1 : -1);
 
   const getDot = ds => {
     if(isPast(ds)) return null;
@@ -497,18 +504,6 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
 
   const confirmBooking = async (id) => {
     await updateDoc(doc(db,"bookings",id), {confirmed:true});
-    // Abre WhatsApp com mensagem pré-preenchida para o aluno
-    const b = bookings.find(x=>x.id===id);
-    if(b && b.studentPhone) {
-      const numero = b.studentPhone.replace(/\D/g,"");
-      const numeroComDDI = numero.startsWith("55") ? numero : `55${numero}`;
-      const msg = encodeURIComponent(
-        `Olá ${b.studentName}! 🥊 Sua aula de Muay Thai foi *confirmada*!\n\n📅 ${fmtDisplay(b.date)}\n⏰ ${b.time}\n\nQualquer dúvida é só chamar. Até lá!`
-      );
-      setTimeout(() => {
-        window.open(`https://wa.me/${numeroComDDI}?text=${msg}`, "_blank");
-      }, 300);
-    }
   };
 
   const removeBooking = async id => {
@@ -578,16 +573,116 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
             {/* Stats */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
               {[
-                {label:"Hoje",value:bookings.filter(b=>b.date===fmt(TODAY)).length,color:"#fbbf24"},
-                {label:"Esta semana",value:bookings.filter(b=>{const d=parseDate(b.date);return d>=TODAY&&d<addDays(TODAY,7);}).length,color:"#f87171"},
-                {label:"Alunos",value:students.length,color:"#60a5fa"},
+                {label:"Hoje", value:bookings.filter(b=>b.date===fmt(TODAY)).length, color:"#fbbf24", onClick:null},
+                {label:"Esta semana", value:weekBookings.length, color:"#f87171", onClick:()=>setShowWeek(true), clickable:true},
+                {label:"Alunos", value:students.length, color:"#60a5fa", onClick:null},
               ].map(s=>(
-                <div key={s.label} style={{background:"#161616",border:"1px solid #262626",borderRadius:14,padding:"12px 8px",textAlign:"center"}}>
+                <div key={s.label}
+                  onClick={s.onClick||undefined}
+                  style={{background:"#161616",border:`1px solid ${s.clickable?"#7f1d1d":"#262626"}`,
+                    borderRadius:14,padding:"12px 8px",textAlign:"center",
+                    cursor:s.clickable?"pointer":"default",
+                    transition:"border .2s",position:"relative"}}>
                   <p style={{color:s.color,fontSize:24,fontWeight:900,margin:0}}>{s.value}</p>
                   <p style={{color:"#525252",fontSize:11,margin:0}}>{s.label}</p>
+                  {s.clickable&&<p style={{color:"#7f1d1d",fontSize:9,fontWeight:700,margin:"2px 0 0",letterSpacing:.5}}>VER LISTA ↗</p>}
                 </div>
               ))}
             </div>
+
+            {/* Modal semana */}
+            {showWeek&&(
+              <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.85)",
+                zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+                onClick={()=>setShowWeek(false)}>
+                <div onClick={e=>e.stopPropagation()}
+                  style={{background:"#161616",border:"1px solid #404040",borderRadius:"20px 20px 0 0",
+                    width:"100%",maxWidth:430,maxHeight:"80vh",overflow:"hidden",
+                    display:"flex",flexDirection:"column"}}>
+                  {/* Handle */}
+                  <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
+                    <div style={{width:40,height:4,borderRadius:2,background:"#404040"}}/>
+                  </div>
+                  {/* Header */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 20px 16px"}}>
+                    <div>
+                      <p style={{color:"#fff",fontWeight:900,fontSize:18,margin:0}}>Aulas desta semana</p>
+                      <p style={{color:"#525252",fontSize:12,margin:0}}>{weekBookings.length} agendamento{weekBookings.length!==1?"s":""}</p>
+                    </div>
+                    <button onClick={()=>setShowWeek(false)}
+                      style={{width:32,height:32,borderRadius:10,background:"#262626",border:"none",
+                        cursor:"pointer",color:"#737373",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                  </div>
+                  {/* Lista */}
+                  <div style={{overflowY:"auto",padding:"0 20px 32px"}}>
+                    {weekBookings.length===0
+                      ? <div style={{textAlign:"center",padding:"32px 0"}}>
+                          <p style={{color:"#525252",fontSize:14}}>Nenhuma aula agendada para esta semana.</p>
+                        </div>
+                      : (() => {
+                          // Agrupa por data
+                          const byDate = {};
+                          weekBookings.forEach(b => {
+                            if(!byDate[b.date]) byDate[b.date]=[];
+                            byDate[b.date].push(b);
+                          });
+                          return Object.entries(byDate).map(([date, bList])=>(
+                            <div key={date} style={{marginBottom:16}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                                <span style={{color:"#f87171",fontSize:12,fontWeight:700}}>
+                                  {isToday(date)?"HOJE":fmtDisplay(date).toUpperCase()}
+                                </span>
+                                <div style={{flex:1,height:1,background:"#262626"}}/>
+                                <span style={{color:"#525252",fontSize:11}}>{bList.length} aula{bList.length!==1?"s":""}</span>
+                              </div>
+                              {bList.map(b=>{
+                                const waNum = b.studentPhone?`55${b.studentPhone.replace(/\D/g,"")}`:null;
+                                const waMsg = encodeURIComponent(`Olá ${b.studentName}! 🥊 Sua aula de Muay Thai foi *confirmada*!\n\n📅 ${fmtDisplay(b.date)}\n⏰ ${b.time}\n\nQualquer dúvida é só chamar. Até lá!`);
+                                return (
+                                  <div key={b.id} style={{background:"#1a1a1a",border:"1px solid #262626",
+                                    borderRadius:12,padding:"12px 14px",marginBottom:8,
+                                    display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                      <div style={{width:36,height:36,borderRadius:10,
+                                        background:b.confirmed?"#14532d":"#422006",
+                                        display:"flex",alignItems:"center",justifyContent:"center",
+                                        fontSize:15,fontWeight:900,
+                                        color:b.confirmed?"#86efac":"#fcd34d",flexShrink:0}}>
+                                        {b.studentName?.[0]}
+                                      </div>
+                                      <div>
+                                        <p style={{color:"#fff",fontSize:13,fontWeight:700,margin:0}}>{b.studentName}</p>
+                                        <p style={{color:"#737373",fontSize:11,margin:0}}>⏰ {b.time} · {b.studentPhone}</p>
+                                      </div>
+                                    </div>
+                                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                                      {!b.confirmed&&(
+                                        <button onClick={()=>confirmBooking(b.id)}
+                                          style={{height:28,padding:"0 8px",borderRadius:8,background:"#14532d",
+                                            border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#86efac"}}>
+                                          ✓
+                                        </button>
+                                      )}
+                                      {b.confirmed && waNum && (
+                                        <a href={`https://wa.me/${waNum}?text=${waMsg}`} target="_blank" rel="noreferrer"
+                                          style={{height:28,padding:"0 8px",borderRadius:8,background:"#14532d",
+                                            border:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#86efac",
+                                            textDecoration:"none",display:"flex",alignItems:"center"}}>
+                                          📲
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Calendar */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
