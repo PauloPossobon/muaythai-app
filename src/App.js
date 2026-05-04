@@ -10,8 +10,8 @@ const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const DAYS_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const DAYS_FULL  = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-const ADMIN_USER = "professor";
-const DEFAULT_ADMIN_PASS = "muay123";
+const ADMIN_USER = "Eduardo";
+const DEFAULT_ADMIN_PASS = "Eduardo123";
 
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
