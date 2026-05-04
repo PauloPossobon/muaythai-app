@@ -495,8 +495,20 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
     setConfig(updated);
   };
 
-  const confirmBooking = async id => {
+  const confirmBooking = async (id) => {
     await updateDoc(doc(db,"bookings",id), {confirmed:true});
+    // Abre WhatsApp com mensagem pré-preenchida para o aluno
+    const b = bookings.find(x=>x.id===id);
+    if(b && b.studentPhone) {
+      const numero = b.studentPhone.replace(/\D/g,"");
+      const numeroComDDI = numero.startsWith("55") ? numero : `55${numero}`;
+      const msg = encodeURIComponent(
+        `Olá ${b.studentName}! 🥊 Sua aula de Muay Thai foi *confirmada*!\n\n📅 ${fmtDisplay(b.date)}\n⏰ ${b.time}\n\nQualquer dúvida é só chamar. Até lá!`
+      );
+      setTimeout(() => {
+        window.open(`https://wa.me/${numeroComDDI}?text=${msg}`, "_blank");
+      }, 300);
+    }
   };
 
   const removeBooking = async id => {
@@ -619,26 +631,55 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
                               </button>
                             </div>
                             {slotBs.map(b=>{
+                              const waNumero = b.studentPhone ? `55${b.studentPhone.replace(/\D/g,"")}` : null;
+                              const waMsg = encodeURIComponent(
+                                `Olá ${b.studentName}! 🥊 Sua aula de Muay Thai foi *confirmada*!\n\n📅 ${fmtDisplay(selected)}\n⏰ ${b.time}\n\nQualquer dúvida é só chamar. Até lá!`
+                              );
                               return (
-                                <div key={b.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-                                  background:"#0a0a0a",borderRadius:12,padding:"10px 12px",marginTop:6}}>
-                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                    <div style={{width:30,height:30,borderRadius:15,background:b.confirmed?"#14532d":"#422006",
-                                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,
-                                      color:b.confirmed?"#86efac":"#fcd34d"}}>{b.studentName?.[0]}</div>
-                                    <div>
-                                      <p style={{color:"#fff",fontSize:13,fontWeight:700,margin:0}}>{b.studentName}</p>
-                                      <p style={{color:"#525252",fontSize:11,margin:0}}>{b.studentPhone}</p>
+                                <div key={b.id} style={{background:"#0a0a0a",borderRadius:12,padding:"10px 12px",marginTop:6}}>
+                                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                      <div style={{width:30,height:30,borderRadius:15,background:b.confirmed?"#14532d":"#422006",
+                                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,
+                                        color:b.confirmed?"#86efac":"#fcd34d"}}>{b.studentName?.[0]}</div>
+                                      <div>
+                                        <p style={{color:"#fff",fontSize:13,fontWeight:700,margin:0}}>{b.studentName}</p>
+                                        <p style={{color:"#525252",fontSize:11,margin:0}}>{b.studentPhone}</p>
+                                      </div>
+                                    </div>
+                                    <div style={{display:"flex",gap:6}}>
+                                      {!b.confirmed&&(
+                                        <button
+                                          onClick={()=>confirmBooking(b.id)}
+                                          title="Confirmar e avisar aluno no WhatsApp"
+                                          style={{height:30,padding:"0 10px",borderRadius:8,background:"#14532d",
+                                            border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                                            color:"#86efac",display:"flex",alignItems:"center",gap:4}}>
+                                          ✓ Confirmar
+                                        </button>
+                                      )}
+                                      {b.confirmed && waNumero && (
+                                        <a
+                                          href={`https://wa.me/${waNumero}?text=${waMsg}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          title="Reenviar mensagem no WhatsApp"
+                                          style={{height:30,padding:"0 10px",borderRadius:8,background:"#14532d",
+                                            border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                                            color:"#86efac",display:"flex",alignItems:"center",gap:4,
+                                            textDecoration:"none"}}>
+                                          📲 WhatsApp
+                                        </a>
+                                      )}
+                                      <button onClick={()=>removeBooking(b.id)} style={{width:30,height:30,borderRadius:8,
+                                        background:"#450a0a",border:"none",cursor:"pointer",fontSize:14}}>🗑</button>
                                     </div>
                                   </div>
-                                  <div style={{display:"flex",gap:6}}>
-                                    {!b.confirmed&&(
-                                      <button onClick={()=>confirmBooking(b.id)} style={{width:30,height:30,borderRadius:8,
-                                        background:"#14532d",border:"none",cursor:"pointer",fontSize:14}}>✓</button>
-                                    )}
-                                    <button onClick={()=>removeBooking(b.id)} style={{width:30,height:30,borderRadius:8,
-                                      background:"#450a0a",border:"none",cursor:"pointer",fontSize:14}}>🗑</button>
-                                  </div>
+                                  {b.confirmed&&(
+                                    <p style={{color:"#4ade80",fontSize:11,margin:"6px 0 0 38px",fontWeight:700}}>
+                                      ✓ Confirmado — clique em WhatsApp para reenviar aviso
+                                    </p>
+                                  )}
                                 </div>
                               );
                             })}
