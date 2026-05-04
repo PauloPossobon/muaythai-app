@@ -10,8 +10,8 @@ const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const DAYS_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const DAYS_FULL  = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-const ADMIN_USER = "Eduardo";
-const ADMIN_PASS = "Eduardo123"; // troque aqui
+const ADMIN_USER = "professor";
+const DEFAULT_ADMIN_PASS = "muay123";
 
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
@@ -260,10 +260,10 @@ function StudentAuthScreen({ onBack, onEnter, students }) {
   );
 }
 
-function AdminLoginScreen({ onBack, onLogin }) {
+function AdminLoginScreen({ onBack, onLogin, adminPass }) {
   const [user,setUser]=useState(""); const [pass,setPass]=useState(""); const [error,setError]=useState("");
   const handle = () => {
-    if(user===ADMIN_USER&&pass===ADMIN_PASS) onLogin();
+    if(user===ADMIN_USER && pass===(adminPass||DEFAULT_ADMIN_PASS)) onLogin();
     else setError("Usuário ou senha incorretos.");
   };
   return (
@@ -274,8 +274,7 @@ function AdminLoginScreen({ onBack, onLogin }) {
         <div style={{width:48,height:48,background:"#1f1f1f",border:"1px solid #404040",borderRadius:16,
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,marginBottom:24}}>🔒</div>
         <h2 style={{fontSize:24,fontWeight:900,color:"#fff",marginBottom:8}}>Área do Professor</h2>
-        <p style={{color:"#737373",fontSize:13,marginBottom:8}}>Acesso restrito.</p>
-        <p style={{color:"#525252",fontSize:12,marginBottom:32}}>Demo: professor / muay123</p>
+        <p style={{color:"#737373",fontSize:13,marginBottom:32}}>Acesso restrito.</p>
         <Field label="Usuário" value={user} onChange={v=>{setUser(v);setError("");}} placeholder="professor"/>
         <Field label="Senha" type="password" value={pass} onChange={v=>{setPass(v);setError("");}} placeholder="••••••••"/>
         {error&&<p style={{color:"#f87171",fontSize:12,marginBottom:12}}>⚠ {error}</p>}
@@ -463,7 +462,7 @@ function StudentApp({ student, config, bookings, onBook, onCancel, onLogout }) {
 }
 
 // ─── ADMIN APP ────────────────────────────────────────────────────────────────
-function AdminApp({ config, setConfig, bookings, setBookings, students, notifications, setNotifications, onLogout }) {
+function AdminApp({ config, setConfig, bookings, setBookings, students, notifications, setNotifications, onLogout, adminPass, setAdminPass }) {
   const [tab, setTab] = useState("calendar");
   const [year, setYear] = useState(TODAY.getFullYear());
   const [month, setMonth] = useState(TODAY.getMonth());
@@ -722,15 +721,37 @@ function AdminApp({ config, setConfig, bookings, setBookings, students, notifica
         )}
 
         {/* ── CONFIG ── */}
-        {tab==="config"&&<AdminConfig config={config} setConfig={setConfig}/>}
+        {tab==="config"&&<AdminConfig config={config} setConfig={setConfig} adminPass={adminPass} setAdminPass={setAdminPass}/>}
       </div>
     </div>
   );
 }
 
-function AdminConfig({ config, setConfig }) {
+function AdminConfig({ config, setConfig, adminPass, setAdminPass }) {
   const [saved, setSaved] = useState(false);
   const [localConfig, setLocalConfig] = useState(config);
+
+  // ── Alterar senha ──
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [senhaMsg, setSenhaMsg] = useState(null); // {type:"ok"|"err", text}
+
+  const handleSenha = async () => {
+    setSenhaMsg(null);
+    if(senhaAtual !== (adminPass||DEFAULT_ADMIN_PASS)) {
+      setSenhaMsg({type:"err", text:"Senha atual incorreta."});
+      return;
+    }
+    if(novaSenha.length < 4) {
+      setSenhaMsg({type:"err", text:"Nova senha precisa ter pelo menos 4 caracteres."});
+      return;
+    }
+    await setDoc(doc(db,"config","auth"), { adminPass: novaSenha });
+    setAdminPass(novaSenha);
+    setSenhaAtual(""); setNovaSenha("");
+    setSenhaMsg({type:"ok", text:"Senha alterada com sucesso!"});
+    setTimeout(()=>setSenhaMsg(null), 3000);
+  };
 
   const save = async () => {
     await setDoc(doc(db,"config","main"), localConfig);
@@ -802,6 +823,23 @@ function AdminConfig({ config, setConfig }) {
         {saved?"✓ Salvo!":"Salvar configurações"}
       </Btn>
 
+      {/* ── Alterar senha ── */}
+      <div style={{background:"#161616",border:"1px solid #262626",borderRadius:16,padding:16,marginTop:12}}>
+        <p style={{color:"#fff",fontWeight:700,fontSize:15,margin:"0 0 4px"}}>🔑 Alterar senha</p>
+        <p style={{color:"#525252",fontSize:12,margin:"0 0 14px"}}>Troque a senha de acesso ao painel do professor.</p>
+        <Field label="Senha atual" type="password" value={senhaAtual} onChange={v=>{setSenhaAtual(v);setSenhaMsg(null);}} placeholder="••••••••"/>
+        <Field label="Nova senha" type="password" value={novaSenha} onChange={v=>{setNovaSenha(v);setSenhaMsg(null);}} placeholder="••••••••"/>
+        {senhaMsg&&(
+          <p style={{fontSize:12,fontWeight:700,marginBottom:12,
+            color:senhaMsg.type==="ok"?"#4ade80":"#f87171"}}>
+            {senhaMsg.type==="ok"?"✓":"⚠"} {senhaMsg.text}
+          </p>
+        )}
+        <Btn onClick={handleSenha} variant="outline" size="md" full disabled={!senhaAtual||!novaSenha}>
+          Confirmar nova senha
+        </Btn>
+      </div>
+
       <div style={{background:"#161616",border:"1px solid #262626",borderRadius:16,padding:16,marginTop:12}}>
         <p style={{color:"#fbbf24",fontSize:12,fontWeight:700,margin:"0 0 6px"}}>💡 Dica</p>
         <p style={{color:"#737373",fontSize:12,lineHeight:1.6,margin:0}}>
@@ -820,6 +858,7 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [notifications, setNotifications] = useState([]);
+  const [adminPass, setAdminPass] = useState(DEFAULT_ADMIN_PASS);
   const [loading, setLoading] = useState(true);
 
   // Realtime listeners
@@ -838,6 +877,10 @@ export default function App() {
       if(snap.exists()) setConfig({...DEFAULT_CONFIG,...snap.data()});
       setLoading(false);
     }, () => setLoading(false)));
+
+    unsubs.push(onSnapshot(doc(db,"config","auth"), snap => {
+      if(snap.exists() && snap.data().adminPass) setAdminPass(snap.data().adminPass);
+    }));
 
     unsubs.push(onSnapshot(
       query(collection(db,"notifications"), orderBy("createdAt","desc")),
@@ -859,7 +902,7 @@ export default function App() {
     <>
       {screen==="welcome"&&<WelcomeScreen onStudent={()=>setScreen("student-auth")} onAdmin={()=>setScreen("admin-login")}/>}
       {screen==="student-auth"&&<StudentAuthScreen onBack={()=>setScreen("welcome")} onEnter={s=>{setCurrentStudent(s);setScreen("student");}} students={students}/>}
-      {screen==="admin-login"&&<AdminLoginScreen onBack={()=>setScreen("welcome")} onLogin={()=>setScreen("admin")}/>}
+      {screen==="admin-login"&&<AdminLoginScreen onBack={()=>setScreen("welcome")} onLogin={()=>setScreen("admin")} adminPass={adminPass}/>}
       {screen==="student"&&currentStudent&&(
         <StudentApp student={currentStudent} config={config} bookings={bookings}
           onBook={b=>setBookings(prev=>[...prev,b])} onCancel={id=>setBookings(prev=>prev.filter(b=>b.id!==id))}
@@ -872,6 +915,7 @@ export default function App() {
         <AdminApp config={config} setConfig={setConfig} bookings={bookings} setBookings={setBookings}
           students={students} notifications={notifications} setNotifications={setNotifications}
           onLogout={()=>setScreen("welcome")}
+          adminPass={adminPass} setAdminPass={setAdminPass}
         />
       )}
     </>
